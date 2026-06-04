@@ -1,1207 +1,198 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gestão de Projetos</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-  /* ── RESET & BASE ─────────────────────────────────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+const SPREADSHEET_ID = "1r0Igx2msmlV1x5gU2rb_mlOjo_5oRWnOrIPcUU348vY";
+const ABA_PROJETOS   = "projetos";
+const ABA_CONFIG     = "config";
 
-  :root {
-    --azul:       #1a2e5a;
-    --azul-md:    #243d78;
-    --azul-lt:    #e8edf6;
-    --azul-brd:   #c5d0e8;
-    --vermelho:   #c0392b;
-    --verm-lt:    #fdf0ee;
-    --verm-brd:   #f0b8b2;
-    --branco:     #ffffff;
-    --cinza-fundo:#f4f5f8;
-    --cinza-brd:  #dde1ea;
-    --cinza-md:   #8d94a5;
-    --cinza-dk:   #4a5166;
-    --texto:      #1e2433;
-    --texto-sec:  #5a6178;
+function doGet(e) {
+  const acao = e.parameter.acao || "";
+  let resultado;
 
-    --s-nao:      #6b7280; --s-nao-bg: #f3f4f6;
-    --s-and:      #1d6fa8; --s-and-bg: #dbeafe;
-    --s-rev:      #b45309; --s-rev-bg: #fef3c7;
-    --s-con:      #166534; --s-con-bg: #dcfce7;
-    --s-atra:     #991b1b; --s-atra-bg: #fee2e2;
+  if (acao === "listar")         resultado = listarProjetos();
+  else if (acao === "indicadores") resultado = getIndicadores(e);
+  else resultado = { erro: "Ação não reconhecida." };
 
-    --p-alta:     #9a1c1c; --p-alta-bg: #fee2e2;
-    --p-media:    #92400e; --p-media-bg: #fef3c7;
-    --p-baixa:    #065f46; --p-baixa-bg: #d1fae5;
+  return buildResponse(resultado);
+}
 
-    --radius-sm:  6px;
-    --radius-md:  10px;
-    --radius-lg:  14px;
-    --radius-xl:  18px;
-    --shadow-sm:  0 1px 3px rgba(0,0,0,.08);
-    --shadow-md:  0 4px 16px rgba(0,0,0,.10);
-    --shadow-lg:  0 8px 32px rgba(0,0,0,.12);
-    --trans:      .18s ease;
+function doPost(e) {
+  let payload;
+  try {
+    payload = JSON.parse(e.postData.contents);
+  } catch(err) {
+    return buildResponse({ erro: "JSON inválido." });
   }
 
-  html { scroll-behavior: smooth; }
+  const acao = payload.acao || "";
+  let resultado;
 
-  body {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    background: var(--cinza-fundo);
-    color: var(--texto);
-    font-size: 14px;
-    line-height: 1.6;
-    min-height: 100vh;
-  }
+  if (acao === "cadastrar")        resultado = cadastrarProjeto(payload);
+  else if (acao === "editar")      resultado = editarProjeto(payload);
+  else if (acao === "excluir")     resultado = excluirProjeto(payload);
+  else if (acao === "status")      resultado = atualizarStatus(payload);
+  else resultado = { erro: "Ação não reconhecida." };
 
-  /* ── HEADER ───────────────────────────────────────────── */
-  .header {
-    background: var(--azul);
-    color: #fff;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    box-shadow: 0 2px 12px rgba(0,0,0,.18);
-  }
-  .header-inner {
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 0 24px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .header-logo {
-    width: 32px; height: 32px;
-    background: rgba(255,255,255,.18);
-    border-radius: var(--radius-sm);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px;
-  }
-  .header-title { font-size: 16px; font-weight: 700; letter-spacing: -.3px; }
-  .header-sub { font-size: 12px; opacity: .65; margin-left: 4px; }
-  .header-actions { margin-left: auto; display: flex; gap: 8px; }
-  .btn-header {
-    background: rgba(255,255,255,.15);
-    color: #fff;
-    border: 1px solid rgba(255,255,255,.25);
-    border-radius: var(--radius-sm);
-    padding: 6px 14px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background var(--trans);
-    font-family: inherit;
-  }
-  .btn-header:hover { background: rgba(255,255,255,.25); }
-  .btn-header.primary {
-    background: var(--vermelho);
-    border-color: var(--vermelho);
-  }
-  .btn-header.primary:hover { background: #a93226; border-color: #a93226; }
+  return buildResponse(resultado);
+}
 
-  /* ── LAYOUT ───────────────────────────────────────────── */
-  .container { max-width: 1280px; margin: 0 auto; padding: 28px 24px; }
+function buildResponse(data) {
+  const output = ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+  return output;
+}
 
-  .section-title {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--texto-sec);
-    text-transform: uppercase;
-    letter-spacing: .8px;
-    margin-bottom: 14px;
+function getSheet(nome) {
+  return SpreadsheetApp
+    .openById(SPREADSHEET_ID)
+    .getSheetByName(nome);
+}
+
+function gerarId() {
+  const cfg   = getSheet(ABA_CONFIG);
+  const dados = cfg.getDataRange().getValues();
+  let linha   = -1;
+  let atual   = 0;
+
+  for (let i = 1; i < dados.length; i++) {
+    if (dados[i][0] === "ultimo_id") {
+      linha = i + 1;
+      atual = parseInt(dados[i][1]) || 0;
+      break;
+    }
   }
 
-  /* ── INDICADORES ──────────────────────────────────────── */
-  .cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 12px;
-    margin-bottom: 28px;
-  }
-  .card-ind {
-    background: var(--branco);
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    transition: box-shadow var(--trans), transform var(--trans);
-  }
-  .card-ind:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
-  .card-ind-icon {
-    width: 36px; height: 36px;
-    border-radius: var(--radius-sm);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-    margin-bottom: 4px;
-  }
-  .card-ind-label { font-size: 12px; color: var(--texto-sec); font-weight: 500; }
-  .card-ind-value { font-size: 28px; font-weight: 700; line-height: 1; color: var(--texto); }
-  .card-ind-sub { font-size: 11px; color: var(--cinza-md); }
+  const novo = atual + 1;
+  if (linha > 0) cfg.getRange(linha, 2).setValue(novo);
+  else cfg.appendRow(["ultimo_id", novo]);
 
-  .card-ind.azul   .card-ind-icon { background: var(--azul-lt); color: var(--azul); }
-  .card-ind.verde  .card-ind-icon { background: #dcfce7; color: #166534; }
-  .card-ind.amarelo .card-ind-icon { background: #fef3c7; color: #92400e; }
-  .card-ind.vermelho .card-ind-icon { background: var(--verm-lt); color: var(--vermelho); }
-  .card-ind.roxo   .card-ind-icon { background: #ede9fe; color: #5b21b6; }
-  .card-ind.cinza  .card-ind-icon { background: #f3f4f6; color: #4b5563; }
+  return "PRJ-" + String(novo).padStart(3, "0");
+}
 
-  /* Prioridades mini */
-  .prioridades-mini {
-    background: var(--branco);
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-lg);
-    padding: 18px 20px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    grid-column: span 2;
-  }
-  @media(max-width: 768px){ .prioridades-mini { grid-column: span 1; } }
-  .prio-row { display: flex; align-items: center; gap: 10px; }
-  .prio-label { font-size: 12px; font-weight: 600; width: 45px; }
-  .prio-bar-wrap { flex: 1; height: 8px; background: var(--cinza-brd); border-radius: 99px; overflow: hidden; }
-  .prio-bar { height: 100%; border-radius: 99px; transition: width .5s ease; }
-  .prio-count { font-size: 12px; font-weight: 700; width: 24px; text-align: right; }
-
-  /* ── FILTROS ──────────────────────────────────────────── */
-  .filtros-bar {
-    background: var(--branco);
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-lg);
-    padding: 16px 20px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    align-items: flex-end;
-    margin-bottom: 20px;
-  }
-  .filtro-group { display: flex; flex-direction: column; gap: 4px; min-width: 150px; flex: 1; }
-  .filtro-group label { font-size: 11px; font-weight: 600; color: var(--texto-sec); text-transform: uppercase; letter-spacing: .5px; }
-  .filtro-group select, .filtro-group input {
-    height: 36px;
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-sm);
-    padding: 0 10px;
-    font-family: inherit;
-    font-size: 13px;
-    color: var(--texto);
-    background: var(--branco);
-    outline: none;
-    transition: border-color var(--trans);
-  }
-  .filtro-group select:focus, .filtro-group input:focus { border-color: var(--azul-md); }
-
-  .btn-limpar {
-    height: 36px;
-    padding: 0 16px;
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--texto-sec);
-    font-family: inherit;
-    font-size: 13px;
-    cursor: pointer;
-    transition: all var(--trans);
-    white-space: nowrap;
-    align-self: flex-end;
-  }
-  .btn-limpar:hover { background: var(--cinza-fundo); border-color: var(--cinza-md); }
-
-  /* ── TABELA ───────────────────────────────────────────── */
-  .tabela-wrap {
-    background: var(--branco);
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    box-shadow: var(--shadow-sm);
-  }
-  .tabela-header {
-    padding: 16px 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 1px solid var(--cinza-brd);
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .tabela-header-left { display: flex; align-items: center; gap: 10px; }
-  .tabela-count {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--texto-sec);
-    background: var(--cinza-fundo);
-    padding: 3px 10px;
-    border-radius: 99px;
-  }
-
-  .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead th {
-    background: var(--cinza-fundo);
-    color: var(--texto-sec);
-    font-weight: 600;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: .6px;
-    padding: 10px 14px;
-    text-align: left;
-    border-bottom: 1px solid var(--cinza-brd);
-    white-space: nowrap;
-  }
-  tbody tr {
-    border-bottom: 1px solid var(--cinza-brd);
-    transition: background var(--trans);
-  }
-  tbody tr:last-child { border-bottom: none; }
-  tbody tr:hover { background: #f7f8fb; }
-  tbody td { padding: 12px 14px; vertical-align: middle; }
-
-  .td-nome { font-weight: 600; color: var(--texto); max-width: 200px; }
-  .td-nome small { display: block; font-weight: 400; color: var(--texto-sec); font-size: 11px; margin-top: 1px; }
-  .td-resp { color: var(--texto-sec); }
-  .td-data { color: var(--texto-sec); white-space: nowrap; }
-  .td-data.atrasado { color: var(--vermelho); font-weight: 600; }
-
-  /* BADGE STATUS */
-  .badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    padding: 3px 10px;
-    border-radius: 99px;
-    font-size: 11px;
-    font-weight: 600;
-    white-space: nowrap;
-  }
-  .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-
-  .badge-nao     { background: var(--s-nao-bg);  color: var(--s-nao); }
-  .badge-nao .badge-dot     { background: var(--s-nao); }
-  .badge-and     { background: var(--s-and-bg);  color: var(--s-and); }
-  .badge-and .badge-dot     { background: var(--s-and); }
-  .badge-rev     { background: var(--s-rev-bg);  color: var(--s-rev); }
-  .badge-rev .badge-dot     { background: var(--s-rev); }
-  .badge-con     { background: var(--s-con-bg);  color: var(--s-con); }
-  .badge-con .badge-dot     { background: var(--s-con); }
-  .badge-atra    { background: var(--s-atra-bg); color: var(--s-atra); }
-  .badge-atra .badge-dot    { background: var(--s-atra); }
-
-  .badge-alta    { background: var(--p-alta-bg);  color: var(--p-alta); }
-  .badge-media   { background: var(--p-media-bg); color: var(--p-media); }
-  .badge-baixa   { background: var(--p-baixa-bg); color: var(--p-baixa); }
-
-  /* AÇÕES */
-  .td-acoes { display: flex; gap: 4px; align-items: center; }
-  .btn-acao {
-    width: 30px; height: 30px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--cinza-brd);
-    background: transparent;
-    cursor: pointer;
-    font-size: 14px;
-    display: flex; align-items: center; justify-content: center;
-    transition: all var(--trans);
-    color: var(--texto-sec);
-  }
-  .btn-acao:hover { background: var(--cinza-fundo); border-color: var(--cinza-md); color: var(--texto); }
-  .btn-acao.danger:hover { background: var(--verm-lt); border-color: var(--verm-brd); color: var(--vermelho); }
-
-  /* Status select inline */
-  .status-select {
-    height: 28px;
-    border: 1px solid var(--cinza-brd);
-    border-radius: 99px;
-    padding: 0 8px;
-    font-family: inherit;
-    font-size: 11px;
-    font-weight: 600;
-    cursor: pointer;
-    outline: none;
-    transition: border-color var(--trans);
-  }
-  .status-select:focus { border-color: var(--azul-md); }
-
-  /* EMPTY STATE */
-  .empty-state {
-    padding: 60px 20px;
-    text-align: center;
-    color: var(--texto-sec);
-  }
-  .empty-state-icon { font-size: 40px; margin-bottom: 12px; opacity: .4; }
-  .empty-state h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; color: var(--texto); }
-  .empty-state p { font-size: 13px; }
-
-  /* LOADING */
-  .loading-overlay {
-    position: fixed; inset: 0;
-    background: rgba(26,46,90,.55);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 999;
-    opacity: 0; pointer-events: none;
-    transition: opacity .25s;
-  }
-  .loading-overlay.show { opacity: 1; pointer-events: all; }
-  .loading-box {
-    background: var(--branco);
-    border-radius: var(--radius-xl);
-    padding: 28px 36px;
-    text-align: center;
-    display: flex; flex-direction: column; align-items: center; gap: 14px;
-  }
-  .spinner {
-    width: 36px; height: 36px;
-    border: 3px solid var(--azul-lt);
-    border-top-color: var(--azul-md);
-    border-radius: 50%;
-    animation: spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-size: 13px; font-weight: 600; color: var(--texto-sec); }
-
-  /* TOAST */
-  .toast-area {
-    position: fixed; bottom: 24px; right: 24px;
-    display: flex; flex-direction: column; gap: 8px;
-    z-index: 1100;
-  }
-  .toast {
-    background: var(--azul);
-    color: #fff;
-    padding: 12px 18px;
-    border-radius: var(--radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    box-shadow: var(--shadow-lg);
-    animation: slideIn .25s ease;
-    max-width: 300px;
-    display: flex; align-items: center; gap: 8px;
-  }
-  .toast.erro { background: var(--vermelho); }
-  .toast.sucesso { background: #166534; }
-  @keyframes slideIn { from { transform: translateX(120%); opacity: 0; } to { transform: none; opacity: 1; } }
-
-  /* ── MODAL ────────────────────────────────────────────── */
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(10,20,40,.55);
-    display: flex; align-items: center; justify-content: center;
-    z-index: 500;
-    padding: 20px;
-    opacity: 0; pointer-events: none;
-    transition: opacity .22s;
-  }
-  .modal-overlay.show { opacity: 1; pointer-events: all; }
-  .modal {
-    background: var(--branco);
-    border-radius: var(--radius-xl);
-    width: 100%;
-    max-width: 580px;
-    max-height: 90vh;
-    overflow-y: auto;
-    box-shadow: var(--shadow-lg);
-    transform: translateY(20px);
-    transition: transform .22s;
-  }
-  .modal-overlay.show .modal { transform: none; }
-  .modal-header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--cinza-brd);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .modal-title { font-size: 16px; font-weight: 700; color: var(--texto); }
-  .modal-close {
-    width: 32px; height: 32px;
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--cinza-brd);
-    background: transparent;
-    cursor: pointer;
-    font-size: 18px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--texto-sec);
-    transition: all var(--trans);
-  }
-  .modal-close:hover { background: var(--verm-lt); border-color: var(--verm-brd); color: var(--vermelho); }
-  .modal-body { padding: 24px; }
-  .modal-footer {
-    padding: 16px 24px;
-    border-top: 1px solid var(--cinza-brd);
-    display: flex; justify-content: flex-end; gap: 10px;
-  }
-
-  /* FORMULÁRIO */
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media(max-width: 520px){ .form-grid { grid-template-columns: 1fr; } }
-  .form-full { grid-column: span 2; }
-  @media(max-width: 520px){ .form-full { grid-column: span 1; } }
-
-  .form-group { display: flex; flex-direction: column; gap: 5px; }
-  .form-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: var(--texto-sec);
-    text-transform: uppercase;
-    letter-spacing: .5px;
-  }
-  .form-label span { color: var(--vermelho); }
-  .form-input, .form-select, .form-textarea {
-    height: 38px;
-    border: 1px solid var(--cinza-brd);
-    border-radius: var(--radius-sm);
-    padding: 0 12px;
-    font-family: inherit;
-    font-size: 13px;
-    color: var(--texto);
-    background: var(--branco);
-    outline: none;
-    transition: border-color var(--trans), box-shadow var(--trans);
-    width: 100%;
-  }
-  .form-input:focus, .form-select:focus, .form-textarea:focus {
-    border-color: var(--azul-md);
-    box-shadow: 0 0 0 3px rgba(36,61,120,.10);
-  }
-  .form-input.error, .form-select.error { border-color: var(--vermelho); }
-  .form-textarea {
-    height: auto;
-    min-height: 80px;
-    padding: 10px 12px;
-    resize: vertical;
-  }
-  .form-error { font-size: 11px; color: var(--vermelho); font-weight: 500; display: none; }
-  .form-error.show { display: block; }
-
-  /* BOTÕES */
-  .btn {
-    height: 38px;
-    padding: 0 20px;
-    border-radius: var(--radius-sm);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid transparent;
-    transition: all var(--trans);
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  }
-  .btn-secondary {
-    background: transparent;
-    border-color: var(--cinza-brd);
-    color: var(--texto-sec);
-  }
-  .btn-secondary:hover { background: var(--cinza-fundo); }
-  .btn-primary {
-    background: var(--azul-md);
-    border-color: var(--azul-md);
-    color: #fff;
-  }
-  .btn-primary:hover { background: var(--azul); border-color: var(--azul); }
-  .btn-danger {
-    background: var(--vermelho);
-    border-color: var(--vermelho);
-    color: #fff;
-  }
-  .btn-danger:hover { background: #a93226; }
-
-  /* CONFIRM MODAL */
-  .confirm-icon {
-    width: 52px; height: 52px;
-    background: var(--verm-lt);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 24px;
-    margin: 0 auto 16px;
-  }
-  .confirm-title { text-align: center; font-size: 17px; font-weight: 700; margin-bottom: 8px; }
-  .confirm-text { text-align: center; color: var(--texto-sec); font-size: 13px; }
-
-  /* RESPONSIVE */
-  @media(max-width: 640px){
-    .container { padding: 16px; }
-    .header-sub { display: none; }
-    .filtros-bar { gap: 8px; }
-    .filtro-group { min-width: 130px; }
-    .td-acoes .btn-acao { width: 26px; height: 26px; font-size: 12px; }
-  }
-
-  /* SCROLLBAR */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--cinza-brd); border-radius: 99px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--cinza-md); }
-</style>
-</head>
-<body>
-
-<!-- ── LOADING ─────────────────────────────────────────── -->
-<div class="loading-overlay" id="loadingOverlay">
-  <div class="loading-box">
-    <div class="spinner"></div>
-    <div class="loading-text" id="loadingText">Carregando...</div>
-  </div>
-</div>
-
-<!-- ── TOAST ───────────────────────────────────────────── -->
-<div class="toast-area" id="toastArea"></div>
-
-<!-- ── HEADER ─────────────────────────────────────────── -->
-<header class="header">
-  <div class="header-inner">
-    <div class="header-logo">📋</div>
-    <div>
-      <span class="header-title">Gestão de Projetos</span>
-      <span class="header-sub">— Painel de controle</span>
-    </div>
-    <div class="header-actions">
-      <button class="btn-header" onclick="atualizarTudo()" title="Recarregar dados">⟳ Atualizar</button>
-      <button class="btn-header primary" onclick="abrirModalCadastro()">+ Novo Projeto</button>
-    </div>
-  </div>
-</header>
-
-<!-- ── MAIN ────────────────────────────────────────────── -->
-<main class="container">
-
-  <!-- INDICADORES -->
-  <div class="section-title">Indicadores</div>
-  <div class="cards-grid" id="cardsGrid">
-    <div class="card-ind azul">
-      <div class="card-ind-icon">📁</div>
-      <div class="card-ind-label">Total</div>
-      <div class="card-ind-value" id="ind-total">—</div>
-      <div class="card-ind-sub">projetos</div>
-    </div>
-    <div class="card-ind azul">
-      <div class="card-ind-icon">⚡</div>
-      <div class="card-ind-label">Em andamento</div>
-      <div class="card-ind-value" id="ind-and">—</div>
-      <div class="card-ind-sub">ativos</div>
-    </div>
-    <div class="card-ind amarelo">
-      <div class="card-ind-icon">🔍</div>
-      <div class="card-ind-label">Em revisão</div>
-      <div class="card-ind-value" id="ind-rev">—</div>
-      <div class="card-ind-sub">aguardando</div>
-    </div>
-    <div class="card-ind verde">
-      <div class="card-ind-icon">✅</div>
-      <div class="card-ind-label">Concluídos</div>
-      <div class="card-ind-value" id="ind-con">—</div>
-      <div class="card-ind-sub">finalizados</div>
-    </div>
-    <div class="card-ind vermelho">
-      <div class="card-ind-icon">⚠️</div>
-      <div class="card-ind-label">Atrasados</div>
-      <div class="card-ind-value" id="ind-atra">—</div>
-      <div class="card-ind-sub">fora do prazo</div>
-    </div>
-    <div class="card-ind cinza">
-      <div class="card-ind-icon">🕐</div>
-      <div class="card-ind-label">Não iniciados</div>
-      <div class="card-ind-value" id="ind-nao">—</div>
-      <div class="card-ind-sub">aguardando início</div>
-    </div>
-    <div class="prioridades-mini">
-      <div class="section-title" style="margin-bottom:8px">Por prioridade</div>
-      <div class="prio-row">
-        <span class="prio-label" style="color:var(--p-alta)">Alta</span>
-        <div class="prio-bar-wrap"><div class="prio-bar" id="bar-alta" style="background:var(--p-alta);width:0%"></div></div>
-        <span class="prio-count" id="cnt-alta" style="color:var(--p-alta)">0</span>
-      </div>
-      <div class="prio-row">
-        <span class="prio-label" style="color:var(--p-media)">Média</span>
-        <div class="prio-bar-wrap"><div class="prio-bar" id="bar-media" style="background:var(--p-media);width:0%"></div></div>
-        <span class="prio-count" id="cnt-media" style="color:var(--p-media)">0</span>
-      </div>
-      <div class="prio-row">
-        <span class="prio-label" style="color:var(--p-baixa)">Baixa</span>
-        <div class="prio-bar-wrap"><div class="prio-bar" id="bar-baixa" style="background:var(--p-baixa);width:0%"></div></div>
-        <span class="prio-count" id="cnt-baixa" style="color:var(--p-baixa)">0</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- FILTROS -->
-  <div class="section-title">Filtros</div>
-  <div class="filtros-bar">
-    <div class="filtro-group">
-      <label>Status</label>
-      <select id="filtroStatus" onchange="aplicarFiltros()">
-        <option value="">Todos</option>
-        <option>Não iniciado</option>
-        <option>Em andamento</option>
-        <option>Em revisão</option>
-        <option>Concluído</option>
-        <option>Atrasado</option>
-      </select>
-    </div>
-    <div class="filtro-group">
-      <label>Prioridade</label>
-      <select id="filtroPrioridade" onchange="aplicarFiltros()">
-        <option value="">Todas</option>
-        <option>Alta</option>
-        <option>Média</option>
-        <option>Baixa</option>
-      </select>
-    </div>
-    <div class="filtro-group">
-      <label>Responsável</label>
-      <input type="text" id="filtroResponsavel" placeholder="Buscar responsável..." oninput="aplicarFiltros()">
-    </div>
-    <div class="filtro-group">
-      <label>Buscar</label>
-      <input type="text" id="filtroNome" placeholder="Nome do projeto..." oninput="aplicarFiltros()">
-    </div>
-    <button class="btn-limpar" onclick="limparFiltros()">✕ Limpar</button>
-  </div>
-
-  <!-- TABELA -->
-  <div class="tabela-wrap">
-    <div class="tabela-header">
-      <div class="tabela-header-left">
-        <span class="section-title" style="margin:0">Projetos</span>
-        <span class="tabela-count" id="tabelaCount">0 projetos</span>
-      </div>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Projeto</th>
-            <th>Responsável</th>
-            <th>Início</th>
-            <th>Entrega</th>
-            <th>Status</th>
-            <th>Prioridade</th>
-            <th>Ações</th>
-          </tr>
-        </thead>
-        <tbody id="tabelaBody">
-          <tr><td colspan="8">
-            <div class="empty-state">
-              <div class="empty-state-icon">📋</div>
-              <h3>Carregando projetos...</h3>
-              <p>Aguarde enquanto buscamos os dados.</p>
-            </div>
-          </td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-</main>
-
-<!-- ── MODAL CADASTRO / EDIÇÃO ─────────────────────────── -->
-<div class="modal-overlay" id="modalCadastro">
-  <div class="modal">
-    <div class="modal-header">
-      <span class="modal-title" id="modalCadTitulo">Novo Projeto</span>
-      <button class="modal-close" onclick="fecharModalCadastro()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="form-grid">
-        <div class="form-group form-full">
-          <label class="form-label">Nome do projeto <span>*</span></label>
-          <input class="form-input" id="fNome" type="text" placeholder="Ex: Redesign do site institucional">
-          <span class="form-error" id="fNomeErr">Campo obrigatório</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Responsável <span>*</span></label>
-          <input class="form-input" id="fResponsavel" type="text" placeholder="Ex: Ana Lima">
-          <span class="form-error" id="fRespErr">Campo obrigatório</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Status <span>*</span></label>
-          <select class="form-select" id="fStatus">
-            <option>Não iniciado</option>
-            <option>Em andamento</option>
-            <option>Em revisão</option>
-            <option>Concluído</option>
-            <option>Atrasado</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Data de início <span>*</span></label>
-          <input class="form-input" id="fDataInicio" type="date">
-          <span class="form-error" id="fInicioErr">Campo obrigatório</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Data de entrega <span>*</span></label>
-          <input class="form-input" id="fDataEntrega" type="date">
-          <span class="form-error" id="fEntregaErr">Campo obrigatório</span>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Prioridade <span>*</span></label>
-          <select class="form-select" id="fPrioridade">
-            <option>Alta</option>
-            <option>Média</option>
-            <option>Baixa</option>
-          </select>
-        </div>
-        <div class="form-group form-full">
-          <label class="form-label">Descrição</label>
-          <textarea class="form-textarea" id="fDescricao" placeholder="Descreva brevemente o objetivo do projeto (opcional)..."></textarea>
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharModalCadastro()">Cancelar</button>
-      <button class="btn btn-primary" id="btnSalvar" onclick="salvarProjeto()">Salvar projeto</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL CONFIRMAR EXCLUSÃO ────────────────────────── -->
-<div class="modal-overlay" id="modalConfirm">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-body" style="padding:32px 24px">
-      <div class="confirm-icon">🗑️</div>
-      <div class="confirm-title">Excluir projeto?</div>
-      <div class="confirm-text" id="confirmText">Esta ação não pode ser desfeita.</div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="fecharConfirm()">Cancelar</button>
-      <button class="btn btn-danger" id="btnConfirmDelete" onclick="confirmarExclusao()">Sim, excluir</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── JAVASCRIPT ──────────────────────────────────────── -->
-<script>
-// ============================================================
-// CONFIGURAÇÃO
-// ============================================================
-const API_URL = "https://script.google.com/macros/s/AKfycbxzmV7DpQOD5-BDt4YabDZML4dWLf_vnB23Qe_SBE2Cb1g3FSZEL6lTeXWEq_FazfAp/exec";
-
-// ============================================================
-// ESTADO
-// ============================================================
-let todosProjetos  = [];
-let projetosFiltrados = [];
-let editandoId     = null;
-let excluindoId    = null;
-
-// ============================================================
-// UTILS
-// ============================================================
 function hoje() {
-  return new Date().toISOString().split("T")[0];
+  return Utilities.formatDate(
+    new Date(),
+    Session.getScriptTimeZone(),
+    "yyyy-MM-dd"
+  );
 }
 
-function formatarData(d) {
-  if (!d) return "—";
-  const [a, m, dia] = String(d).split("-");
-  if (!a || !m || !dia) return d;
-  return `${dia}/${m}/${a}`;
-}
-
-function isAtrasado(proj) {
-  return proj.status !== "Concluído" && proj.data_entrega && String(proj.data_entrega) < hoje();
-}
-
-function statusClass(s) {
-  const m = { "Não iniciado":"nao","Em andamento":"and","Em revisão":"rev","Concluído":"con","Atrasado":"atra" };
-  return m[s] || "nao";
-}
-
-function prioClass(p) {
-  const m = { "Alta":"alta","Média":"media","Baixa":"baixa" };
-  return m[p] || "baixa";
-}
-
-// ── TOAST ────────────────────────────────────────────────
-function toast(msg, tipo = "info") {
-  const area = document.getElementById("toastArea");
-  const t = document.createElement("div");
-  t.className = `toast ${tipo}`;
-  const icon = tipo === "sucesso" ? "✓" : tipo === "erro" ? "✕" : "ℹ";
-  t.innerHTML = `<span>${icon}</span> ${msg}`;
-  area.appendChild(t);
-  setTimeout(() => { t.style.animation = "none"; t.style.opacity = "0"; t.style.transition = "opacity .3s"; setTimeout(() => t.remove(), 300); }, 3500);
-}
-
-// ── LOADING ──────────────────────────────────────────────
-function showLoading(txt = "Carregando...") {
-  document.getElementById("loadingText").textContent = txt;
-  document.getElementById("loadingOverlay").classList.add("show");
-}
-function hideLoading() {
-  document.getElementById("loadingOverlay").classList.remove("show");
-}
-
-// ── API HELPERS ──────────────────────────────────────────
-async function apiGet(params = {}) {
-  const qs = new URLSearchParams(params).toString();
-  const url = API_URL + (qs ? "?" + qs : "");
-  const res = await fetch(url);
-  return res.json();
-}
-
-async function apiPost(body) {
-  const res = await fetch(API_URL, {
-    method: "POST",
-    body: JSON.stringify(body)
-  });
-  return res.json();
-}
-
-// ============================================================
-// CARREGAR DADOS
-// ============================================================
-async function carregarProjetos() {
-  try {
-    const data = await apiGet({ acao: "listar" });
-    todosProjetos = data.projetos || [];
-    aplicarFiltros();
-  } catch(e) {
-    toast("Erro ao carregar projetos. Verifique a conexão.", "erro");
-    renderizarTabela([]);
-  }
-}
-
-async function carregarIndicadores(filtros = {}) {
-  try {
-    const params = { acao: "indicadores", ...filtros };
-    const data = await apiGet(params);
-    renderizarIndicadores(data);
-  } catch(e) {
-    console.error("Erro indicadores:", e);
-  }
-}
-
-async function atualizarTudo() {
-  showLoading("Atualizando dados...");
-  await carregarProjetos();
-  await carregarIndicadoresDeFiltros();
-  hideLoading();
-}
-
-// ============================================================
-// RENDERIZAR INDICADORES
-// ============================================================
-function renderizarIndicadores(d) {
-  document.getElementById("ind-total").textContent = d.total ?? 0;
-  document.getElementById("ind-and").textContent   = d.andamento ?? 0;
-  document.getElementById("ind-rev").textContent   = d.revisao ?? 0;
-  document.getElementById("ind-con").textContent   = d.concluido ?? 0;
-  document.getElementById("ind-atra").textContent  = d.atrasados ?? 0;
-  document.getElementById("ind-nao").textContent   = d.naoIniciado ?? 0;
-
-  const pp = d.porPrioridade || {};
-  const total = (pp.Alta || 0) + (pp.Média || 0) + (pp.Baixa || 0);
-  ["alta","media","baixa"].forEach(k => {
-    const chave = k === "alta" ? "Alta" : k === "media" ? "Média" : "Baixa";
-    const val = pp[chave] || 0;
-    const pct = total > 0 ? Math.round(val / total * 100) : 0;
-    document.getElementById("bar-" + k).style.width = pct + "%";
-    document.getElementById("cnt-" + k).textContent = val;
+function projetosParaObjetos(valores) {
+  const cabecalho = valores[0];
+  return valores.slice(1).map(row => {
+    const obj = {};
+    cabecalho.forEach((col, i) => { obj[col] = row[i]; });
+    return obj;
   });
 }
 
-function calcularIndicadoresLocal(lista) {
-  const d = hoje();
-  const pp = { Alta: 0, Média: 0, Baixa: 0 };
-  lista.forEach(p => { if (pp[p.prioridade] !== undefined) pp[p.prioridade]++; });
+function listarProjetos() {
+  const sheet   = getSheet(ABA_PROJETOS);
+  const valores = sheet.getDataRange().getValues();
+  if (valores.length <= 1) return { projetos: [] };
+  const projetos = projetosParaObjetos(valores).reverse();
+  return { projetos };
+}
+
+function getIndicadores(e) {
+  const sheet   = getSheet(ABA_PROJETOS);
+  const valores = sheet.getDataRange().getValues();
+  if (valores.length <= 1) return indicadoresVazios();
+
+  let projetos = projetosParaObjetos(valores);
+
+  const fStatus      = e && e.parameter.status      ? e.parameter.status      : "";
+  const fPrioridade  = e && e.parameter.prioridade  ? e.parameter.prioridade  : "";
+  const fResponsavel = e && e.parameter.responsavel ? e.parameter.responsavel : "";
+
+  if (fStatus)      projetos = projetos.filter(p => p.status === fStatus);
+  if (fPrioridade)  projetos = projetos.filter(p => p.prioridade === fPrioridade);
+  if (fResponsavel) projetos = projetos.filter(p => p.responsavel === fResponsavel);
+
+  const dataHoje    = hoje();
+  const total       = projetos.length;
+  const andamento   = projetos.filter(p => p.status === "Em andamento").length;
+  const concluido   = projetos.filter(p => p.status === "Concluído").length;
+  const revisao     = projetos.filter(p => p.status === "Em revisão").length;
+  const naoIniciado = projetos.filter(p => p.status === "Não iniciado").length;
+  const atrasados   = projetos.filter(p =>
+    p.status !== "Concluído" &&
+    p.data_entrega &&
+    String(p.data_entrega) < dataHoje
+  ).length;
+
+  const porPrioridade = { Alta: 0, Média: 0, Baixa: 0 };
+  projetos.forEach(p => {
+    if (porPrioridade[p.prioridade] !== undefined) porPrioridade[p.prioridade]++;
+  });
+
+  return { total, andamento, concluido, revisao, naoIniciado, atrasados, porPrioridade };
+}
+
+function indicadoresVazios() {
   return {
-    total:       lista.length,
-    andamento:   lista.filter(p => p.status === "Em andamento").length,
-    revisao:     lista.filter(p => p.status === "Em revisão").length,
-    concluido:   lista.filter(p => p.status === "Concluído").length,
-    atrasados:   lista.filter(p => isAtrasado(p)).length,
-    naoIniciado: lista.filter(p => p.status === "Não iniciado").length,
-    porPrioridade: pp
+    total: 0, andamento: 0, concluido: 0,
+    revisao: 0, naoIniciado: 0, atrasados: 0,
+    porPrioridade: { Alta: 0, Média: 0, Baixa: 0 }
   };
 }
 
-function carregarIndicadoresDeFiltros() {
-  const ind = calcularIndicadoresLocal(projetosFiltrados);
-  renderizarIndicadores(ind);
+function cadastrarProjeto(p) {
+  const sheet = getSheet(ABA_PROJETOS);
+  const id    = gerarId();
+  const agora = hoje();
+
+  sheet.appendRow([
+    id, p.nome, p.responsavel, p.data_inicio,
+    p.data_entrega, p.status, p.prioridade,
+    p.descricao || "", agora, agora
+  ]);
+
+  return { sucesso: true, id };
 }
 
-// ============================================================
-// FILTROS
-// ============================================================
-function aplicarFiltros() {
-  const fStatus     = document.getElementById("filtroStatus").value;
-  const fPrioridade = document.getElementById("filtroPrioridade").value;
-  const fResp       = document.getElementById("filtroResponsavel").value.toLowerCase();
-  const fNome       = document.getElementById("filtroNome").value.toLowerCase();
+function editarProjeto(p) {
+  const sheet   = getSheet(ABA_PROJETOS);
+  const valores = sheet.getDataRange().getValues();
 
-  projetosFiltrados = todosProjetos.filter(p => {
-    const statusReal = isAtrasado(p) ? "Atrasado" : p.status;
-    if (fStatus && statusReal !== fStatus) return false;
-    if (fPrioridade && p.prioridade !== fPrioridade) return false;
-    if (fResp && !String(p.responsavel).toLowerCase().includes(fResp)) return false;
-    if (fNome && !String(p.nome).toLowerCase().includes(fNome)) return false;
-    return true;
-  });
-
-  renderizarTabela(projetosFiltrados);
-  const ind = calcularIndicadoresLocal(projetosFiltrados);
-  renderizarIndicadores(ind);
-}
-
-function limparFiltros() {
-  document.getElementById("filtroStatus").value = "";
-  document.getElementById("filtroPrioridade").value = "";
-  document.getElementById("filtroResponsavel").value = "";
-  document.getElementById("filtroNome").value = "";
-  aplicarFiltros();
-}
-
-// ============================================================
-// RENDERIZAR TABELA
-// ============================================================
-function renderizarTabela(lista) {
-  const tbody = document.getElementById("tabelaBody");
-  const count = document.getElementById("tabelaCount");
-  count.textContent = lista.length + (lista.length === 1 ? " projeto" : " projetos");
-
-  if (lista.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8">
-      <div class="empty-state">
-        <div class="empty-state-icon">🔍</div>
-        <h3>Nenhum projeto encontrado</h3>
-        <p>Tente ajustar os filtros ou cadastre um novo projeto.</p>
-      </div>
-    </td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = lista.map(p => {
-    const atrasado   = isAtrasado(p);
-    const statusReal = atrasado ? "Atrasado" : p.status;
-    const sc         = statusClass(statusReal);
-    const pc         = prioClass(p.prioridade);
-
-    const opcoes = ["Não iniciado","Em andamento","Em revisão","Concluído","Atrasado"]
-      .map(s => `<option value="${s}"${p.status === s ? " selected" : ""}>${s}</option>`).join("");
-
-    return `<tr>
-      <td style="color:var(--texto-sec);font-size:11px;font-weight:600">${p.id || "—"}</td>
-      <td class="td-nome">
-        ${escHtml(p.nome)}
-        ${p.descricao ? `<small title="${escHtml(p.descricao)}">${escHtml(p.descricao).substring(0,48)}${p.descricao.length > 48 ? "…" : ""}</small>` : ""}
-      </td>
-      <td class="td-resp">${escHtml(p.responsavel || "—")}</td>
-      <td class="td-data">${formatarData(p.data_inicio)}</td>
-      <td class="td-data ${atrasado ? "atrasado" : ""}">${formatarData(p.data_entrega)}${atrasado ? " ⚠" : ""}</td>
-      <td>
-        <select class="status-select" onchange="mudarStatus('${p.id}', this.value)" title="Alterar status rapidamente">
-          ${opcoes}
-        </select>
-      </td>
-      <td><span class="badge badge-${pc}">${p.prioridade || "—"}</span></td>
-      <td>
-        <div class="td-acoes">
-          <button class="btn-acao" onclick="abrirModalEditar('${p.id}')" title="Editar">✏️</button>
-          <button class="btn-acao danger" onclick="abrirConfirmExcluir('${p.id}', '${escHtml(p.nome)}')" title="Excluir">🗑️</button>
-        </div>
-      </td>
-    </tr>`;
-  }).join("");
-}
-
-function escHtml(str) {
-  return String(str || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
-}
-
-// ============================================================
-// MODAL CADASTRO / EDIÇÃO
-// ============================================================
-function abrirModalCadastro() {
-  editandoId = null;
-  document.getElementById("modalCadTitulo").textContent = "Novo Projeto";
-  document.getElementById("btnSalvar").textContent = "Salvar projeto";
-  limparForm();
-  document.getElementById("fDataInicio").value = hoje();
-  document.getElementById("modalCadastro").classList.add("show");
-}
-
-function fecharModalCadastro() {
-  document.getElementById("modalCadastro").classList.remove("show");
-  editandoId = null;
-  limparForm();
-}
-
-function limparForm() {
-  ["fNome","fResponsavel","fDataInicio","fDataEntrega","fDescricao"].forEach(id => {
-    document.getElementById(id).value = "";
-    document.getElementById(id).classList.remove("error");
-  });
-  ["fStatus","fPrioridade"].forEach(id => {
-    document.getElementById(id).selectedIndex = 0;
-    document.getElementById(id).classList.remove("error");
-  });
-  ["fNomeErr","fRespErr","fInicioErr","fEntregaErr"].forEach(id => {
-    document.getElementById(id).classList.remove("show");
-  });
-}
-
-function abrirModalEditar(id) {
-  const p = todosProjetos.find(x => x.id === id);
-  if (!p) return;
-  editandoId = id;
-  document.getElementById("modalCadTitulo").textContent = "Editar Projeto";
-  document.getElementById("btnSalvar").textContent = "Salvar alterações";
-  limparForm();
-
-  document.getElementById("fNome").value        = p.nome || "";
-  document.getElementById("fResponsavel").value  = p.responsavel || "";
-  document.getElementById("fDataInicio").value   = p.data_inicio || "";
-  document.getElementById("fDataEntrega").value  = p.data_entrega || "";
-  document.getElementById("fDescricao").value    = p.descricao || "";
-  document.getElementById("fStatus").value       = p.status || "Não iniciado";
-  document.getElementById("fPrioridade").value   = p.prioridade || "Alta";
-
-  document.getElementById("modalCadastro").classList.add("show");
-}
-
-// ── SALVAR ───────────────────────────────────────────────
-async function salvarProjeto() {
-  if (!validarForm()) return;
-
-  const dados = {
-    nome:        document.getElementById("fNome").value.trim(),
-    responsavel: document.getElementById("fResponsavel").value.trim(),
-    data_inicio: document.getElementById("fDataInicio").value,
-    data_entrega:document.getElementById("fDataEntrega").value,
-    status:      document.getElementById("fStatus").value,
-    prioridade:  document.getElementById("fPrioridade").value,
-    descricao:   document.getElementById("fDescricao").value.trim()
-  };
-
-  fecharModalCadastro();
-  showLoading(editandoId ? "Salvando alterações..." : "Cadastrando projeto...");
-
-  try {
-    let resp;
-    if (editandoId) {
-      resp = await apiPost({ acao: "editar", id: editandoId, ...dados });
-    } else {
-      resp = await apiPost({ acao: "cadastrar", ...dados });
+  for (let i = 1; i < valores.length; i++) {
+    if (valores[i][0] === p.id) {
+      const l = i + 1;
+      sheet.getRange(l, 2).setValue(p.nome         || valores[i][1]);
+      sheet.getRange(l, 3).setValue(p.responsavel  || valores[i][2]);
+      sheet.getRange(l, 4).setValue(p.data_inicio  || valores[i][3]);
+      sheet.getRange(l, 5).setValue(p.data_entrega || valores[i][4]);
+      sheet.getRange(l, 6).setValue(p.status       || valores[i][5]);
+      sheet.getRange(l, 7).setValue(p.prioridade   || valores[i][6]);
+      sheet.getRange(l, 8).setValue(p.descricao !== undefined ? p.descricao : valores[i][7]);
+      sheet.getRange(l, 10).setValue(hoje());
+      return { sucesso: true };
     }
-
-    if (resp.sucesso) {
-      toast(editandoId ? "Projeto atualizado com sucesso!" : `Projeto cadastrado! ID: ${resp.id}`, "sucesso");
-      await carregarProjetos();
-    } else {
-      toast("Erro: " + (resp.erro || "Falha ao salvar."), "erro");
-    }
-  } catch(e) {
-    toast("Erro de conexão ao salvar.", "erro");
-  } finally {
-    hideLoading();
   }
+  return { erro: "Projeto não encontrado." };
 }
 
-function validarForm() {
-  let ok = true;
-  const campos = [
-    { id: "fNome",       errId: "fNomeErr"   },
-    { id: "fResponsavel",errId: "fRespErr"   },
-    { id: "fDataInicio", errId: "fInicioErr" },
-    { id: "fDataEntrega",errId: "fEntregaErr"}
-  ];
-  campos.forEach(({ id, errId }) => {
-    const el = document.getElementById(id);
-    const err = document.getElementById(errId);
-    if (!el.value.trim()) {
-      el.classList.add("error");
-      err.classList.add("show");
-      ok = false;
-    } else {
-      el.classList.remove("error");
-      err.classList.remove("show");
+function excluirProjeto(p) {
+  const sheet   = getSheet(ABA_PROJETOS);
+  const valores = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < valores.length; i++) {
+    if (valores[i][0] === p.id) {
+      sheet.deleteRow(i + 1);
+      return { sucesso: true };
     }
-  });
-  return ok;
+  }
+  return { erro: "Projeto não encontrado." };
 }
 
-// ============================================================
-// ATUALIZAR STATUS RÁPIDO
-// ============================================================
-async function mudarStatus(id, novoStatus) {
-  try {
-    const resp = await apiPost({ acao: "status", id, status: novoStatus });
-    if (resp.sucesso) {
-      const p = todosProjetos.find(x => x.id === id);
-      if (p) p.status = novoStatus;
-      aplicarFiltros();
-      toast("Status atualizado!", "sucesso");
-    } else {
-      toast("Erro ao atualizar status.", "erro");
-      await carregarProjetos();
+function atualizarStatus(p) {
+  const sheet   = getSheet(ABA_PROJETOS);
+  const valores = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < valores.length; i++) {
+    if (valores[i][0] === p.id) {
+      sheet.getRange(i + 1, 6).setValue(p.status);
+      sheet.getRange(i + 1, 10).setValue(hoje());
+      return { sucesso: true };
     }
-  } catch(e) {
-    toast("Erro de conexão.", "erro");
   }
+  return { erro: "Projeto não encontrado." };
 }
-
-// ============================================================
-// EXCLUIR
-// ============================================================
-function abrirConfirmExcluir(id, nome) {
-  excluindoId = id;
-  document.getElementById("confirmText").textContent = `Deseja excluir o projeto "${nome}"? Esta ação não pode ser desfeita.`;
-  document.getElementById("modalConfirm").classList.add("show");
-}
-
-function fecharConfirm() {
-  document.getElementById("modalConfirm").classList.remove("show");
-  excluindoId = null;
-}
-
-async function confirmarExclusao() {
-  if (!excluindoId) return;
-  const id = excluindoId;
-  fecharConfirm();
-  showLoading("Excluindo projeto...");
-  try {
-    const resp = await apiPost({ acao: "excluir", id });
-    if (resp.sucesso) {
-      toast("Projeto excluído.", "info");
-      await carregarProjetos();
-    } else {
-      toast("Erro ao excluir: " + (resp.erro || ""), "erro");
-    }
-  } catch(e) {
-    toast("Erro de conexão ao excluir.", "erro");
-  } finally {
-    hideLoading();
-  }
-}
-
-// ── FECHAR MODAIS AO CLICAR FORA ────────────────────────
-document.getElementById("modalCadastro").addEventListener("click", function(e) {
-  if (e.target === this) fecharModalCadastro();
-});
-document.getElementById("modalConfirm").addEventListener("click", function(e) {
-  if (e.target === this) fecharConfirm();
-});
-
-// ── ESC para fechar modais ───────────────────────────────
-document.addEventListener("keydown", function(e) {
-  if (e.key === "Escape") {
-    fecharModalCadastro();
-    fecharConfirm();
-  }
-});
-
-// ============================================================
-// INICIALIZAR
-// ============================================================
-(async function init() {
-  showLoading("Carregando projetos...");
-  await carregarProjetos();
-  hideLoading();
-})();
-</script>
-</body>
-</html>
